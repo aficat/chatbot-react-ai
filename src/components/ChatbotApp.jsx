@@ -1,142 +1,148 @@
 import React, { useState } from 'react';
 
-const initialChats = [
-  {
-    id: 1,
-    title: 'Daily Planning',
-    lastMessage: 'You have a meeting at 10 AM, a lunch break at 12 PM, and a gym session at 6 PM.',
-    date: '2025-09-08',
-    time: '08:00 AM',
-    messages: [
-      'Good morning! Can you tell me my schedule for today?',
-      'You have a meeting at 10 AM, a lunch break at 12 PM, and a gym session at 6 PM.',
-      'Thanks! Any reminders for deadlines?',
-      'Yes, your project report is due by 5 PM today.',
-    ],
-  },
-  {
-    id: 2,
-    title: 'Travel Queries',
-    lastMessage: 'The fastest route to the airport is via Route 5, it will take 45 minutes.',
-    date: '2025-09-07',
-    time: '02:30 PM',
-    messages: [
-      'Hi, how long will it take to get to the airport from my place?',
-      'The fastest route to the airport is via Route 5, it will take 45 minutes.',
-      'Can you suggest a good place for lunch near the airport?',
-      'You could try Sky Bistro, it has excellent reviews and is 10 minutes away.',
-    ],
-  },
-  {
-    id: 3,
-    title: 'Weather Check',
-    lastMessage: 'Tomorrow will be partly cloudy with a high of 28°C and a low of 22°C.',
-    date: '2025-09-06',
-    time: '07:00 AM',
-    messages: [
-      'Hello, what’s the weather like tomorrow?',
-      'Tomorrow will be partly cloudy with a high of 28°C and a low of 22°C.',
-      'Do I need an umbrella?',
-      'No, there is only a 10% chance of rain.',
-    ],
-  },
-  {
-    id: 4,
-    title: 'Cooking Help',
-    lastMessage: 'You can make a simple garlic butter pasta in 15 minutes.',
-    date: '2025-09-05',
-    time: '05:20 PM',
-    messages: [
-      'Hey, I want to cook something quick for dinner.',
-      'You can make a simple garlic butter pasta in 15 minutes.',
-      'Great! What ingredients do I need?',
-      'You need pasta, garlic, butter, olive oil, and parmesan cheese.',
-    ],
-  },
-  {
-    id: 5,
-    title: 'Fun Facts',
-    lastMessage: 'Did you know honey never spoils? Archaeologists have found edible honey in ancient Egyptian tombs.',
-    date: '2025-09-04',
-    time: '03:45 PM',
-    messages: [
-      'Tell me something interesting!',
-      'Did you know honey never spoils? Archaeologists have found edible honey in ancient Egyptian tombs.',
-      'Wow! Any other fun fact?',
-      'Bananas are berries, but strawberries are not.',
-    ],
-  },
-  {
-    id: 6,
-    title: 'Fitness Advice',
-    lastMessage: 'Try a 20-minute home workout with squats, lunges, and push-ups.',
-    date: '2025-09-03',
-    time: '06:10 PM',
-    messages: [
-      'I want to exercise at home, any suggestions?',
-      'Try a 20-minute home workout with squats, lunges, and push-ups.',
-      'Should I warm up first?',
-      'Yes, a 5-minute warm-up of jumping jacks or jogging in place is recommended.',
-    ],
-  },
-];
-
-const ChatApp = () => {
-  const [chats, setChats] = useState(initialChats);
-  const [selectedChatId, setSelectedChatId] = useState(chats[0]?.id);
+const ChatbotApp = () => {
+  const [chats, setChats] = useState([]);
+  const [selectedChatId, setSelectedChatId] = useState(null);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const selectChat = (id) => {
+    console.log('🖱 Selecting chat:', id);
     setSelectedChatId(id);
   };
 
   const deleteChat = (id) => {
-    setChats(chats.filter(chat => chat.id !== id));
-    if (selectedChatId === id && chats.length > 1) {
-      setSelectedChatId(chats[0].id);
-    } else if (chats.length === 1) {
-      setSelectedChatId(null);
-    }
+    console.log('🗑 Deleting chat:', id);
+    setChats(prev => prev.filter(chat => chat.id !== id));
+    if (selectedChatId === id) setSelectedChatId(null);
+  };
+
+  const createNewChat = () => {
+    const newChat = {
+      id: Date.now(),
+      title: `New Chat`,
+      messages: [{ role: 'system', content: 'You are a helpful assistant.' }],
+      lastMessage: '',
+      date: new Date().toLocaleDateString(),
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+    console.log('➕ Creating new chat:', newChat);
+    setChats(prev => [newChat, ...prev]);
+    setSelectedChatId(newChat.id);
   };
 
   const selectedChat = chats.find(chat => chat.id === selectedChatId);
 
+  const sendMessage = async () => {
+    if (!input.trim() || !selectedChat) return;
+
+    console.log('✉️ Sending message:', input);
+
+    const userMessage = { role: 'user', content: input };
+    const updatedChats = chats.map(chat =>
+      chat.id === selectedChatId
+        ? { ...chat, messages: [...chat.messages, userMessage], lastMessage: input }
+        : chat
+    );
+
+    setChats(updatedChats);
+    setInput('');
+    setLoading(true);
+
+    try {
+      console.log('🌐 Sending request to backend...');
+      const res = await fetch('http://localhost:5000/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: [...selectedChat.messages, userMessage] }),
+      });
+
+      console.log('🔄 Waiting for response...');
+      const data = await res.json();
+
+      console.log('✅ Response received from backend:', data);
+
+      const botMessage = { role: 'assistant', content: data.reply };
+      setChats(prev =>
+        prev.map(chat =>
+          chat.id === selectedChatId
+            ? { ...chat, messages: [...chat.messages, botMessage], lastMessage: data.reply }
+            : chat
+        )
+      );
+    } catch (err) {
+      console.error('❌ Failed to fetch:', err);
+      setChats(prev =>
+        prev.map(chat =>
+          chat.id === selectedChatId
+            ? { ...chat, messages: [...chat.messages, { role: 'assistant', content: 'Oops, something went wrong.' }] }
+            : chat
+        )
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') sendMessage();
+  };
+
   return (
-    <div className="chat-app-container">
-      <div className="chat-list">
+    <div className="chat-app-container" style={{ display: 'flex', gap: '16px' }}>
+      {/* Sidebar */}
+      <div className="chat-list" style={{ width: '300px', borderRight: '1px solid #ccc', padding: '8px' }}>
         <h3>Your Chats</h3>
-        {chats.length === 0 && <p>No chats available</p>}
+        <button onClick={createNewChat} style={{ marginBottom: '12px' }}>+ New Chat</button>
+        {chats.length === 0 && <p>No chats yet. Start a new chat!</p>}
         {chats.map(chat => (
-          <div key={chat.id} className={`chat-list-item ${chat.id === selectedChatId ? 'active' : ''}`}>
-            <div className="chat-info" onClick={() => selectChat(chat.id)}>
+          <div
+            key={chat.id}
+            className={`chat-list-item ${chat.id === selectedChatId ? 'active' : ''}`}
+            style={{ borderBottom: '1px solid #eee', padding: '8px', cursor: 'pointer' }}
+          >
+            <div onClick={() => selectChat(chat.id)}>
               <h4>{chat.title}</h4>
               <span className="chat-meta">{chat.time} | {chat.date}</span>
               <p>{chat.lastMessage}</p>
             </div>
-            <button className="delete-btn" onClick={() => deleteChat(chat.id)}>✕</button>
+            <button onClick={() => deleteChat(chat.id)}>✕</button>
           </div>
         ))}
       </div>
 
-      <div className="chat-window">
+      {/* Chat Window */}
+      <div className="chat-window" style={{ flex: 1, padding: '8px' }}>
         {selectedChat ? (
           <>
-            <div className="chat-header">{selectedChat.title}</div>
-            <div className="chat-messages">
-              {selectedChat.messages.map((msg, idx) => (
-                <div key={idx} className="message bot">{msg}</div>
-              ))}
+            <div className="chat-header"><h3>{selectedChat.title}</h3></div>
+            <div className="chat-messages" style={{ minHeight: '300px', marginBottom: '12px' }}>
+              {selectedChat.messages
+                .filter(m => m.role !== 'system')
+                .map((msg, idx) => (
+                  <div key={idx} style={{ margin: '4px 0', textAlign: msg.role === 'user' ? 'right' : 'left' }}>
+                    <b>{msg.role === 'user' ? 'You: ' : 'Bot: '}</b>{msg.content}
+                  </div>
+                ))
+              }
+              {loading && <div>Typing...</div>}
             </div>
-            <div className="chat-input">
-              <input type="text" placeholder="Type a message..." />
-              <button>Send</button>
-            </div>
+            <input
+              type="text"
+              placeholder="Type a message..."
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              style={{ width: '80%', marginRight: '8px' }}
+            />
+            <button onClick={sendMessage} disabled={loading}>Send</button>
           </>
         ) : (
-          <div className="chat-placeholder">Select a chat to start messaging</div>
+          <div>Select a chat or start a new chat</div>
         )}
       </div>
     </div>
   );
 };
 
-export default ChatApp;
+export default ChatbotApp;
